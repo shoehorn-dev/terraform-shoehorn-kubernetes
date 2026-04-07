@@ -42,7 +42,3 @@ Features:
 ## Documentation
 
 - [Cloud Partner Integration Guide](docs/guides/cloud-partner-integration.md) — full setup guide with secrets, auth, and deployment lifecycle
-
-## Customers
-
-Customers do **not** need this repo. They use the [Shoehorn Terraform Provider](https://registry.terraform.io/providers/shoehorn-dev/shoehorn) directly to manage resources (entities, teams, policies, etc.) on an already-deployed Shoehorn instance.
