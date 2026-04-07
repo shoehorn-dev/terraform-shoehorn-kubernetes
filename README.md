@@ -2,7 +2,7 @@
 
 **Partner-only** — Terraform modules for deploying Shoehorn onto Kubernetes clusters.
 
-These modules are used by cloud partners (UpCloud, AWS, GCP, etc.) to offer automated Shoehorn deployments on their platforms.
+These modules are used by cloud partners (UpCloud etc.) to offer automated Shoehorn deployments on their platforms.
 
 ## Modules
 
@@ -30,7 +30,7 @@ module "shoehorn" {
 Features:
 - Single `terraform apply` deploys platform + K8s agent
 - Bootstrap API key for initial deployment (auto-expires, no manual steps)
-- Supports Okta, Zitadel, and Entra ID authentication
+- Supports Okta, Zitadel authentication
 - Chart-deployed or external managed PostgreSQL
 - Traefik, nginx, or Envoy Gateway ingress
 
