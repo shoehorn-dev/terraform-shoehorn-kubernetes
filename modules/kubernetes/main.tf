@@ -1,0 +1,369 @@
+# =============================================================================
+# Shoehorn Kubernetes Module
+#
+# Deploys Shoehorn Internal Developer Portal to any Kubernetes cluster.
+#
+# Phase 1 (always): Helm release + health gate
+# Phase 2 (deploy_agent = true): K8s agent token + agent Helm release
+# =============================================================================
+
+locals {
+  secret_name     = "${var.release_name}-credentials"
+  agent_name      = coalesce(var.cluster_name, var.cluster_id, "default")
+  health_url      = "${var.health_check_protocol}://${var.domain}/healthz"
+  org_name        = coalesce(var.organization_name, var.domain)
+  use_external_db = var.database_host != ""
+  pg_host         = local.use_external_db ? var.database_host : "${var.release_name}-postgresql.${var.namespace}.svc.cluster.local"
+  pg_port         = local.use_external_db ? var.database_port : 5432
+  pg_sslmode      = local.use_external_db ? var.database_sslmode : "disable"
+
+  # Compute org_slug with leading/trailing hyphen trimming (QA finding)
+  raw_slug = coalesce(var.organization_slug, replace(lower(var.domain), "/[^a-z0-9]+/", "-"))
+  org_slug = trimprefix(trimsuffix(local.raw_slug, "-"), "-")
+
+  # PostgreSQL Helm values — external or chart-deployed
+  pg_values = local.use_external_db ? yamlencode({
+    postgresql = {
+      enabled = false
+      external = {
+        enabled  = true
+        host     = var.database_host
+        port     = var.database_port
+        database = var.database_name
+        user     = var.database_user
+      }
+    }
+  }) : yamlencode({})
+
+  # Build the complete Helm values as a map, rendered to YAML
+  shoehorn_values = yamlencode({
+    global = {
+      domain       = var.domain
+      storageClass = var.storage_class
+      organization = {
+        slug = local.org_slug
+        name = local.org_name
+      }
+    }
+
+    image = var.image_tag != null ? { tag = var.image_tag } : {}
+
+    replicaCount = {
+      api      = var.replica_count
+      web      = var.replica_count
+      eventbus = var.replica_count
+      worker   = var.replica_count
+      crawler  = var.replica_count
+      forge    = var.replica_count
+    }
+
+    # Credentials secret
+    secret = {
+      existingSecret = local.secret_name
+    }
+
+    # Auth
+    auth = merge(
+      { provider = var.auth_provider },
+      length(var.auth_config) > 0 ? { (var.auth_provider) = var.auth_config } : {}
+    )
+
+    # RBAC admin bootstrap
+    rbac = var.admin_email != "" ? {
+      roleAssignment = {
+        tenantAdmin = { user = var.admin_email }
+      }
+    } : {}
+
+    # Ingress
+    ingressRoute = { enabled = var.ingress_type == "ingressRoute" }
+    ingress = merge(
+      { enabled = var.ingress_type == "ingress" },
+      var.ingress_class != "" ? { className = var.ingress_class } : {}
+    )
+    httpRoute = { enabled = var.ingress_type == "httpRoute" }
+  })
+}
+
+# =============================================================================
+# 1. Namespace
+# =============================================================================
+
+resource "kubernetes_namespace_v1" "shoehorn" {
+  metadata {
+    name = var.namespace
+
+    labels = {
+      "app.kubernetes.io/managed-by" = "terraform"
+      "app.kubernetes.io/part-of"    = "shoehorn"
+    }
+  }
+}
+
+# =============================================================================
+# 2. Credentials Secret
+# =============================================================================
+
+resource "kubernetes_secret_v1" "credentials" {
+  metadata {
+    name      = local.secret_name
+    namespace = kubernetes_namespace_v1.shoehorn.metadata[0].name
+
+    labels = {
+      "app.kubernetes.io/managed-by" = "terraform"
+      "app.kubernetes.io/part-of"    = "shoehorn"
+    }
+  }
+
+  data = var.credentials
+}
+
+# =============================================================================
+# 3. Shoehorn Helm Release
+# =============================================================================
+
+resource "helm_release" "shoehorn" {
+  name             = var.release_name
+  repository       = var.chart_path != "" ? "" : var.chart_repository
+  chart            = var.chart_path != "" ? var.chart_path : "shoehorn"
+  version          = var.chart_version
+  namespace        = kubernetes_namespace_v1.shoehorn.metadata[0].name
+  create_namespace = false
+  wait             = true
+  wait_for_jobs    = true
+  timeout          = var.helm_timeout
+
+  # Module-generated values (lowest priority)
+  # then user YAML overrides
+  # then user set overrides (highest priority)
+  values = concat(
+    [local.shoehorn_values],
+    local.use_external_db ? [local.pg_values] : [],
+    var.helm_values,
+  )
+
+  set = [for k, v in var.helm_set : { name = k, value = v }]
+
+  set_sensitive = [for k, v in var.helm_set_sensitive : { name = k, value = v }]
+}
+
+# =============================================================================
+# 4. Health Gate
+# =============================================================================
+
+data "http" "health" {
+  url      = local.health_url
+  insecure = true
+
+  retry {
+    attempts     = var.health_check_attempts
+    min_delay_ms = 3000
+    max_delay_ms = 10000
+  }
+
+  depends_on = [helm_release.shoehorn]
+}
+
+# =============================================================================
+# 5. Bootstrap API Key Job (optional — for single-apply agent deployment)
+# =============================================================================
+# Seeds a deterministic API key derived from JWT_SECRET into the database
+# so the Shoehorn provider can authenticate for agent registration in the
+# same terraform apply. The key is derived identically on both sides
+# (Go: DeriveBootstrapKey, Terraform: Python HMAC-SHA256).
+#
+# Depends on helm_release (not health_check) because it only needs
+# PostgreSQL + migrations to have run, not a routable HTTPS endpoint.
+
+resource "kubernetes_job_v1" "bootstrap_api_key" {
+  count = var.enable_bootstrap && var.deploy_agent ? 1 : 0
+
+  metadata {
+    name      = "${var.release_name}-bootstrap-api-key"
+    namespace = kubernetes_namespace_v1.shoehorn.metadata[0].name
+
+    labels = {
+      "app.kubernetes.io/name"       = "shoehorn-bootstrap"
+      "app.kubernetes.io/managed-by" = "terraform"
+      "app.kubernetes.io/part-of"    = "shoehorn"
+    }
+  }
+
+  spec {
+    ttl_seconds_after_finished = 300
+    active_deadline_seconds    = 300
+    backoff_limit              = 3
+
+    template {
+      metadata {
+        labels = {
+          "app.kubernetes.io/name"       = "shoehorn-bootstrap"
+          "app.kubernetes.io/managed-by" = "terraform"
+        }
+      }
+      spec {
+        restart_policy = "OnFailure"
+
+        # Wait for PostgreSQL to accept queries
+        init_container {
+          name  = "wait-for-db"
+          image = "postgres:17-alpine"
+          command = [
+            "sh", "-c",
+            "until pg_isready -h ${local.pg_host} -p ${local.pg_port}; do echo waiting for postgresql; sleep 2; done"
+          ]
+          security_context {
+            run_as_non_root            = true
+            run_as_user                = 65534
+            read_only_root_filesystem  = true
+            allow_privilege_escalation = false
+          }
+        }
+
+        container {
+          name    = "bootstrap"
+          image   = var.bootstrap_image
+          command = ["/api", "--bootstrap-api-key"]
+
+          # MIGRATION_DATABASE_URL built at runtime via shell to avoid
+          # password appearing in pod spec (C1 security finding).
+          env {
+            name = "POSTGRES_PASSWORD"
+            value_from {
+              secret_key_ref {
+                name = local.secret_name
+                key  = "postgres_password"
+              }
+            }
+          }
+
+          env {
+            name  = "DB_HOST"
+            value = local.pg_host
+          }
+
+          env {
+            name  = "DB_PORT"
+            value = tostring(local.pg_port)
+          }
+
+          env {
+            name  = "DB_SSLMODE"
+            value = local.pg_sslmode
+          }
+
+          env {
+            name = "APP_USER_PASSWORD"
+            value_from {
+              secret_key_ref {
+                name = local.secret_name
+                key  = "db_password"
+              }
+            }
+          }
+
+          env {
+            name = "JWT_SECRET"
+            value_from {
+              secret_key_ref {
+                name = local.secret_name
+                key  = "jwt_secret"
+              }
+            }
+          }
+
+          env {
+            name  = "ENVIRONMENT"
+            value = var.bootstrap_environment
+          }
+
+          env {
+            name  = "BOOTSTRAP_ORG_SLUG"
+            value = local.org_slug
+          }
+
+          env {
+            name  = "BOOTSTRAP_ORG_NAME"
+            value = local.org_name
+          }
+
+          env {
+            name  = "LOG_LEVEL"
+            value = "info"
+          }
+
+          security_context {
+            run_as_non_root            = true
+            run_as_user                = 65534
+            read_only_root_filesystem  = true
+            allow_privilege_escalation = false
+          }
+        }
+      }
+    }
+  }
+
+  wait_for_completion = true
+
+  timeouts {
+    create = "5m"
+  }
+
+  depends_on = [helm_release.shoehorn]
+}
+
+# =============================================================================
+# 6. K8s Agent Registration (Phase 2)
+# =============================================================================
+
+resource "shoehorn_k8s_agent" "cluster" {
+  count = var.deploy_agent ? 1 : 0
+
+  name       = local.agent_name
+  cluster_id = var.cluster_id
+
+  depends_on = [data.http.health, kubernetes_job_v1.bootstrap_api_key]
+}
+
+# =============================================================================
+# 7. K8s Agent Helm Release (Phase 2)
+# =============================================================================
+
+resource "helm_release" "k8s_agent" {
+  count = var.deploy_agent ? 1 : 0
+
+  name             = "${var.release_name}-k8s-agent"
+  repository       = var.agent_chart_path != "" ? "" : var.chart_repository
+  chart            = var.agent_chart_path != "" ? var.agent_chart_path : "shoehorn-k8s-agent"
+  version          = var.agent_chart_version
+  namespace        = kubernetes_namespace_v1.shoehorn.metadata[0].name
+  create_namespace = false
+  wait             = true
+  timeout          = 300
+
+  values = concat(
+    [yamlencode({
+      shoehorn = {
+        apiURL = "${var.health_check_protocol}://${var.domain}"
+        cluster = {
+          id   = var.cluster_id
+          name = local.agent_name
+        }
+      }
+      image = var.agent_image_tag != null ? {
+        tag        = var.agent_image_tag
+        pullPolicy = "Always"
+      } : {}
+      imagePullSecrets = var.image_pull_secrets
+      agent = var.agent_gitops_tool != "" ? {
+        gitops = { tool = var.agent_gitops_tool }
+      } : {}
+    })],
+  )
+
+  set_sensitive = [
+    { name = "shoehorn.apiToken", value = shoehorn_k8s_agent.cluster[0].token },
+  ]
+
+  set = [for k, v in var.agent_helm_set : { name = k, value = v }]
+}
