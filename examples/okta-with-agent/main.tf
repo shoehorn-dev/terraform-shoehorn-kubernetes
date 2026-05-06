@@ -105,9 +105,8 @@ resource "random_bytes" "auth_encryption_key" {
   length = 32
 }
 
-resource "random_password" "session_encryption_key" {
-  length  = 32
-  special = false
+resource "random_bytes" "session_encryption_key" {
+  length = 32
 }
 
 resource "random_password" "valkey_password" {
@@ -147,7 +146,7 @@ module "shoehorn" {
     db_password            = random_password.db_password.result
     jwt_secret             = random_password.jwt_secret.result
     auth_encryption_key    = random_bytes.auth_encryption_key.base64
-    session_encryption_key = random_password.session_encryption_key.result
+    session_encryption_key = random_bytes.session_encryption_key.base64
     valkey_password        = random_password.valkey_password.result
     meilisearch_master_key = random_password.meilisearch_master_key.result
     okta_client_secret     = var.okta_client_secret
@@ -160,13 +159,13 @@ module "shoehorn" {
   cluster_id       = var.cluster_id
   cluster_name     = var.cluster_name
 
-  # Okta user/group sync
+  # Okta user/group sync. The module wires `auth.okta.clientSecretRef.key` and
+  # `auth.okta.apiTokenSecretRef.key` automatically from the matching keys in
+  # the `credentials` map above — no helm_set entry needed for those.
   helm_set = {
-    "secret.mappings.OKTA_CLIENT_SECRET" = "okta_client_secret"
-    "secret.mappings.OKTA_API_TOKEN"     = "okta_api_token"
-    "auth.orgdata.enabled"               = "true"
-    "auth.orgdata.providers[0]"          = "okta"
-    "auth.orgdata.primaryProvider"       = "okta"
+    "auth.orgdata.enabled"          = "true"
+    "auth.orgdata.providers[0]"     = "okta"
+    "auth.orgdata.primaryProvider"  = "okta"
   }
 
   health_check_protocol = "https"

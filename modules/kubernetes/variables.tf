@@ -127,15 +127,29 @@ variable "admin_email" {
 }
 
 # =============================================================================
-# Credentials (becomes the K8s secret referenced by secret.existingSecret)
+# Credentials (the keys here become the K8s secret referenced by secret.defaultName).
+# The module auto-wires per-credential *SecretRef paths from key names below.
 # =============================================================================
 
 variable "credentials" {
   description = <<-EOT
-    Map of secret keys for the shoehorn-credentials K8s secret.
-    Required keys: postgres_password, db_password, jwt_secret, auth_encryption_key, session_encryption_key
-    Optional keys: valkey_password, meilisearch_master_key, github_app_id, zitadel_project_id, etc.
-    See Helm chart values.yaml secret.mappings for full key reference.
+    Map of secret keys for the shoehorn-credentials K8s secret. Keys present
+    here are wired into the chart's per-credential *SecretRef blocks
+    automatically (e.g. okta_client_secret -> auth.okta.clientSecretRef.key).
+
+    Required keys:
+      postgres_password, db_password, jwt_secret, auth_encryption_key,
+      session_encryption_key
+
+    Optional keys (provide when the corresponding feature is in use):
+      valkey_password, meilisearch_master_key,
+      okta_client_secret, okta_api_token,
+      entra_client_secret, zitadel_service_user_pat,
+      github_app_private_key, github_forge_private_key,
+      smtp_password, argocd_token, upcloud_token
+
+    Note: session_encryption_key and auth_encryption_key must be base64 of 32
+    raw bytes (use `random_bytes { length = 32 }.base64`, not random_password).
   EOT
   type        = map(string)
   sensitive   = true
