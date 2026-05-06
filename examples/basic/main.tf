@@ -61,9 +61,11 @@ resource "random_bytes" "auth_encryption_key" {
   length = 32
 }
 
-resource "random_password" "session_encryption_key" {
-  length  = 32
-  special = false
+# 32 raw bytes → base64. The platform decodes the value and requires 32 bytes;
+# `random_password { length = 32, special = false }` would produce 32 ASCII chars
+# which decode to 24 bytes and fail with "encryption key must be 32 bytes".
+resource "random_bytes" "session_encryption_key" {
+  length = 32
 }
 
 resource "random_password" "valkey_password" {
@@ -101,15 +103,14 @@ module "shoehorn" {
     db_password            = random_password.db_password.result
     jwt_secret             = random_password.jwt_secret.result
     auth_encryption_key    = random_bytes.auth_encryption_key.base64
-    session_encryption_key = random_password.session_encryption_key.result
+    session_encryption_key = random_bytes.session_encryption_key.base64
     valkey_password        = random_password.valkey_password.result
     meilisearch_master_key = random_password.meilisearch_master_key.result
     okta_client_secret     = var.okta_client_secret
   }
 
-  helm_set = {
-    "secret.mappings.OKTA_CLIENT_SECRET" = "okta_client_secret"
-  }
+  # The module wires `auth.okta.clientSecretRef.key` automatically from the
+  # `okta_client_secret` key in `credentials` — no helm_set needed.
 
   health_check_protocol = "https"
 }

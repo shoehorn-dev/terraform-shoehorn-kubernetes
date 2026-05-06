@@ -21,21 +21,71 @@ locals {
   raw_slug = coalesce(var.organization_slug, replace(lower(var.domain), "/[^a-z0-9]+/", "-"))
   org_slug = trimprefix(trimsuffix(local.raw_slug, "-"), "-")
 
-  # PostgreSQL Helm values — external or chart-deployed
-  pg_values = local.use_external_db ? yamlencode({
-    postgresql = {
-      enabled = false
-      external = {
-        enabled  = true
-        host     = var.database_host
-        port     = var.database_port
-        database = var.database_name
-        user     = var.database_user
-      }
-    }
-  }) : yamlencode({})
+  # Set of credential keys present (used to conditionally emit *SecretRef blocks)
+  cred_keys = keys(var.credentials)
 
-  # Build the complete Helm values as a map, rendered to YAML
+  # ---------------------------------------------------------------------------
+  # Per-component *SecretRef blocks — chart references each credential by
+  # secretKeyRef (name + key). With secret.defaultName set, name can be
+  # omitted; the chart helper falls back to the shared default secret.
+  # ---------------------------------------------------------------------------
+
+  postgresql_block = merge(
+    { enabled = !local.use_external_db },
+    local.use_external_db ? {
+      external = {
+        enabled = true
+        host    = var.database_host
+        port    = var.database_port
+      }
+    } : {},
+    contains(local.cred_keys, "postgres_password") ? { superuserPasswordSecretRef = { key = "postgres_password" } } : {},
+    contains(local.cred_keys, "db_password") ? { passwordSecretRef = { key = "db_password" } } : {},
+  )
+
+  valkey_block = contains(local.cred_keys, "valkey_password") ? {
+    passwordSecretRef = { key = "valkey_password" }
+  } : {}
+
+  meilisearch_block = contains(local.cred_keys, "meilisearch_master_key") ? {
+    masterKeySecretRef = { key = "meilisearch_master_key" }
+  } : {}
+
+  # Auth session: jwt + encryption keys (required by chart for all providers)
+  auth_session_block = merge(
+    contains(local.cred_keys, "jwt_secret") ? { jwtSecretRef = { key = "jwt_secret" } } : {},
+    contains(local.cred_keys, "auth_encryption_key") ? { encryptionKeyRef = { key = "auth_encryption_key" } } : {},
+    contains(local.cred_keys, "session_encryption_key") ? { secretsEncryptionKeyRef = { key = "session_encryption_key" } } : {},
+  )
+
+  # Auth provider-specific block: non-secret fields from auth_config + credential refs
+  okta_block = var.auth_provider == "okta" ? merge(
+    var.auth_config,
+    contains(local.cred_keys, "okta_client_secret") ? { clientSecretRef = { key = "okta_client_secret" } } : {},
+    contains(local.cred_keys, "okta_api_token") ? { apiTokenSecretRef = { key = "okta_api_token" } } : {},
+  ) : null
+
+  zitadel_block = var.auth_provider == "zitadel" ? merge(
+    var.auth_config,
+    contains(local.cred_keys, "zitadel_service_user_pat") ? { serviceUserPatSecretRef = { key = "zitadel_service_user_pat" } } : {},
+  ) : null
+
+  entra_block = var.auth_provider == "entra-id" ? merge(
+    var.auth_config,
+    contains(local.cred_keys, "entra_client_secret") ? { clientSecretRef = { key = "entra_client_secret" } } : {},
+  ) : null
+
+  auth_block = merge(
+    { provider = var.auth_provider },
+    length(local.auth_session_block) > 0 ? { session = local.auth_session_block } : {},
+    local.okta_block != null ? { okta = local.okta_block } : {},
+    local.zitadel_block != null ? { zitadel = local.zitadel_block } : {},
+    local.entra_block != null ? { entraId = local.entra_block } : {},
+  )
+
+  # ---------------------------------------------------------------------------
+  # Top-level Helm values (rendered to YAML)
+  # ---------------------------------------------------------------------------
   shoehorn_values = yamlencode({
     global = {
       domain       = var.domain
@@ -57,16 +107,16 @@ locals {
       forge    = var.replica_count
     }
 
-    # Credentials secret
+    # Shared credentials Secret (this module creates the K8s Secret;
+    # per-credential *SecretRef blocks below reference it by key only).
     secret = {
-      existingSecret = local.secret_name
+      defaultName = local.secret_name
     }
 
-    # Auth
-    auth = merge(
-      { provider = var.auth_provider },
-      length(var.auth_config) > 0 ? { (var.auth_provider) = var.auth_config } : {}
-    )
+    postgresql  = local.postgresql_block
+    valkey      = local.valkey_block
+    meilisearch = local.meilisearch_block
+    auth        = local.auth_block
 
     # RBAC admin bootstrap
     rbac = var.admin_email != "" ? {
@@ -82,6 +132,14 @@ locals {
       var.ingress_class != "" ? { className = var.ingress_class } : {}
     )
     httpRoute = { enabled = var.ingress_type == "httpRoute" }
+
+    # cert-manager subchart override: parent's global.logLevel ("info") would
+    # propagate to cert-manager which expects a number — pin a number here.
+    "cert-manager" = {
+      global = {
+        logLevel = 2
+      }
+    }
   })
 }
 
@@ -138,7 +196,6 @@ resource "helm_release" "shoehorn" {
   # then user set overrides (highest priority)
   values = concat(
     [local.shoehorn_values],
-    local.use_external_db ? [local.pg_values] : [],
     var.helm_values,
   )
 

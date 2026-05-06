@@ -203,10 +203,9 @@ resource "random_bytes" "auth_encryption_key" {
   length = 32
 }
 
-# Session encryption key (hex-encoded)
-resource "random_password" "session_encryption_key" {
-  length  = 32
-  special = false
+# Session encryption key (MUST be base64-encoded 32 bytes — same shape as auth_encryption_key)
+resource "random_bytes" "session_encryption_key" {
+  length = 32
 }
 
 # Service passwords
@@ -233,7 +232,7 @@ module "shoehorn" {
     # Signing & encryption
     jwt_secret             = random_password.jwt_secret.result              # JWT token signing
     auth_encryption_key    = random_bytes.auth_encryption_key.base64        # AES-256-GCM (base64!)
-    session_encryption_key = random_password.session_encryption_key.result  # Session cookie encryption
+    session_encryption_key = random_bytes.session_encryption_key.base64     # base64 of 32 bytes
 
     # Service passwords
     valkey_password        = random_password.valkey_password.result         # Valkey/Redis
@@ -256,7 +255,7 @@ kubectl create secret generic shoehorn-credentials -n shoehorn \
   --from-literal=db_password="$(openssl rand -base64 24)" \
   --from-literal=jwt_secret="$(openssl rand -hex 32)" \
   --from-literal=auth_encryption_key="$(openssl rand -base64 32)" \
-  --from-literal=session_encryption_key="$(openssl rand -hex 32)" \
+  --from-literal=session_encryption_key="$(openssl rand -base64 32)" \
   --from-literal=valkey_password="$(openssl rand -base64 24)" \
   --from-literal=meilisearch_master_key="$(openssl rand -hex 32)" \
   --from-literal=okta_client_secret="YOUR_OKTA_CLIENT_SECRET"
@@ -280,35 +279,37 @@ kubectl create secret generic shoehorn-credentials -n shoehorn \
 
 **Okta:**
 
-| Secret | Source | Description |
+| Credential key | Source | Used for |
 |---|---|---|
 | `okta_client_secret` | Okta app → General → Client Credentials | OAuth2 OIDC client secret |
-| `okta_api_token` | Okta → Security → API → Tokens | For user/group sync (orgdata) |
+| `okta_api_token` | Okta → Security → API → Tokens | User/group sync (orgdata) |
 
-Helm overrides needed:
+Drop the keys into the `credentials` map. The module wires
+`auth.okta.clientSecretRef.key` and `auth.okta.apiTokenSecretRef.key`
+automatically. Enable orgdata with:
+
 ```hcl
 helm_set = {
-  "secret.mappings.OKTA_CLIENT_SECRET" = "okta_client_secret"
-  "secret.mappings.OKTA_API_TOKEN"     = "okta_api_token"
-  "auth.orgdata.enabled"               = "true"
-  "auth.orgdata.providers[0]"          = "okta"
-  "auth.orgdata.primaryProvider"       = "okta"
+  "auth.orgdata.enabled"          = "true"
+  "auth.orgdata.providers[0]"     = "okta"
+  "auth.orgdata.primaryProvider"  = "okta"
 }
 ```
 
 **Zitadel:**
 
-| Secret | Source | Description |
+| Credential key | Source | Used for |
 |---|---|---|
-| `service_user_pat` | Zitadel → Service Users → Personal Access Token | Service-to-service auth |
+| `zitadel_service_user_pat` | Zitadel → Service Users → Personal Access Token | Service-to-service auth |
 
-Helm overrides needed:
+Same pattern — drop the key in `credentials`. The module wires
+`auth.zitadel.serviceUserPatSecretRef.key` automatically. Enable orgdata with:
+
 ```hcl
 helm_set = {
-  "secret.mappings.ZITADEL_SERVICE_USER_PAT" = "service_user_pat"
-  "auth.orgdata.enabled"                     = "true"
-  "auth.orgdata.providers[0]"                = "zitadel"
-  "auth.orgdata.primaryProvider"             = "zitadel"
+  "auth.orgdata.enabled"          = "true"
+  "auth.orgdata.providers[0]"     = "zitadel"
+  "auth.orgdata.primaryProvider"  = "zitadel"
 }
 ```
 
@@ -320,7 +321,6 @@ GitHub requires two separate GitHub Apps: one for **Crawler** (repo discovery) a
 |---|---|---|
 | `github_app_id` | GitHub → Settings → Developer Settings → GitHub Apps | Crawler app ID |
 | `github_app_installation_id` | GitHub → Settings → Installations | Crawler installation ID |
-| `github_webhook_secret` | Set during GitHub App creation | Webhook verification secret |
 | `github_forge_app_id` | Separate GitHub App for Forge | Forge app ID |
 | `github_forge_installation_id` | Forge app installation | Forge installation ID |
 
@@ -369,17 +369,38 @@ kubectl create secret generic github-forge-credentials -n shoehorn \
 | `argocd_token` | ArgoCD GitOps integration | ArgoCD API bearer token |
 | `upcloud_token` | UpCloud cloud resource discovery | UpCloud API token |
 
-Add the corresponding `secret.mappings` via `helm_set` for any optional secrets used.
+Drop the keys above into the `credentials` map; the module wires the matching
+`*SecretRef` paths in the chart automatically.
 
 ### Important Notes
 
--> **`auth_encryption_key` must be base64-encoded 32 bytes.** Using `random_password` (plain text) will fail with: _"encryption key must be 32 bytes (256 bits), got 24 bytes"_. Use `random_bytes` with `.base64` output.
+-> **`auth_encryption_key` and `session_encryption_key` must be base64 of 32 raw bytes.** Using `random_password { length = 32 }` will fail with _"encryption key must be 32 bytes (256 bits), got 24 bytes"_ because 32 ASCII chars decode to 24 bytes. Use `random_bytes { length = 32 }` and pass `.base64`.
 
 -> **`postgres_password` and `db_password` must be different.** Same password defeats Row-Level Security — a compromised runtime app could authenticate as the migration user and bypass all tenant isolation.
 
--> **GitHub private keys are PEM files, not strings.** They must be mounted as volumes, not passed in the credentials map.
+-> **GitHub private keys are PEM files, not strings.** Mount them as volumes via `extraVolumes` (see the GitHub Integration section above).
 
--> **`secret.mappings` via `helm_set` merges with defaults.** Using `helm_values` for mappings will **replace** all default mappings — use `helm_set` with dot notation instead.
+-> **Numeric-string IDs need `helm_values`, not `helm_set`.** GitHub App IDs and installation IDs are numeric strings. The Helm provider's `--set` syntax coerces numeric values to integers and the chart schema rejects them as `expected: string, given: integer`. Pass these via `helm_values` (raw YAML) where types are preserved:
+
+```hcl
+helm_values = [yamlencode({
+  auth = {
+    github = {
+      appId          = "1234567"
+      installationId = "98765432"
+    }
+  }
+})]
+```
+
+-> **The `shoehorn` Terraform provider must be configured even when `deploy_agent = false`.** The module declares the `shoehorn_k8s_agent` resource with `count = var.deploy_agent ? 1 : 0`, but Terraform still validates the provider block at init time. Add a stub provider block to your root module:
+
+```hcl
+provider "shoehorn" {
+  host    = "https://${var.domain}"
+  api_key = var.deploy_agent ? var.shoehorn_api_key : "stub-not-used"
+}
+```
 
 ## Auth Provider Configuration
 
