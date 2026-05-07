@@ -1,7 +1,7 @@
 # =============================================================================
 # Shoehorn Kubernetes Module
 #
-# Deploys Shoehorn Internal Developer Portal to any Kubernetes cluster.
+# Deploys Shoehorn, the Intelligent Developer Platform, to any Kubernetes cluster.
 #
 # Phase 1 (always): Helm release + health gate
 # Phase 2 (deploy_agent = true): K8s agent token + agent Helm release
