@@ -1,7 +1,7 @@
 # =============================================================================
 # Shoehorn Kubernetes Module
 #
-# Deploys Shoehorn Internal Developer Portal to any Kubernetes cluster.
+# Deploys Shoehorn, the Intelligent Developer Platform, to any Kubernetes cluster.
 #
 # Phase 1 (always): Helm release + health gate
 # Phase 2 (deploy_agent = true): K8s agent token + agent Helm release
@@ -261,10 +261,23 @@ resource "kubernetes_job_v1" "bootstrap_api_key" {
       spec {
         restart_policy = "OnFailure"
 
-        # Wait for PostgreSQL to accept queries
+        # Pull secrets for both the bootstrap container and the wait-for-db
+        # init container. The chart's registryCredentials helper creates
+        # Secrets named <release>-registry-<name>; callers pass them in via
+        # var.image_pull_secrets (same list used by the agent helm release).
+        dynamic "image_pull_secrets" {
+          for_each = var.image_pull_secrets
+          content {
+            name = image_pull_secrets.value.name
+          }
+        }
+
+        # Wait for PostgreSQL to accept queries. Reuses the chart's pinned
+        # postgres image (already pulled by the StatefulSet) so this Job
+        # doesn't need access to Docker Hub.
         init_container {
           name  = "wait-for-db"
-          image = "postgres:17-alpine"
+          image = var.bootstrap_wait_db_image
           command = [
             "sh", "-c",
             "until pg_isready -h ${local.pg_host} -p ${local.pg_port}; do echo waiting for postgresql; sleep 2; done"

@@ -7,7 +7,7 @@ description: |-
 
 # Cloud Partner Integration Guide
 
-This guide explains how cloud partners integrate Shoehorn into their Kubernetes offerings, enabling customers to deploy a fully configured Internal Developer Portal with a single `terraform apply`.
+This guide explains how cloud partners integrate Shoehorn into their Kubernetes offerings, so customers can deploy a fully configured Intelligent Developer Platform with a single `terraform apply`.
 
 ## Architecture
 
@@ -54,7 +54,7 @@ module "shoehorn" {
 
 | Phase | Resources | Depends On |
 |---|---|---|
-| 1 | Kubernetes namespace + credentials secret | — |
+| 1 | Kubernetes namespace + credentials secret | none |
 | 2 | Shoehorn Helm release (all microservices) | Phase 1 |
 | 3 | Health check gate | Phase 2 |
 | 4 | Bootstrap API key K8s Job | Phase 3 |
@@ -79,11 +79,11 @@ The bootstrap key is designed for initial deployment only:
 
 | Safeguard | Description |
 |---|---|
-| HMAC-SHA256 derivation | Not plain SHA256 — prevents length-extension attacks |
-| Minimal scope | `k8s-agents:write` only — cannot access admin APIs |
+| HMAC-SHA256 derivation | Not plain SHA256. Prevents length-extension attacks |
+| Minimal scope | `k8s-agents:write` only. Cannot access admin APIs |
 | 1-hour TTL | Auto-expires, cannot be used for persistent access |
 | Environment gate | Refuses to run in production (fail-closed allowlist) |
-| Deterministic UUID5 | Idempotent upserts — safe to re-run |
+| Deterministic UUID5 | Idempotent upserts. Safe to re-run |
 | Revocation guard | Cannot un-revoke a manually revoked key |
 | Audit logging | WARN-level log on creation with key prefix, tenant, scopes |
 
@@ -141,7 +141,7 @@ provider "shoehorn" {
 }
 ```
 
-Subsequent `terraform apply` calls use the permanent key — no bootstrap needed.
+Subsequent `terraform apply` calls use the permanent key. No bootstrap needed.
 
 ## Database Options
 
@@ -176,12 +176,12 @@ module "shoehorn" {
 
 ## Secrets Generation
 
-Shoehorn requires several secrets, each with a specific format. **Do not reuse secrets across keys** — especially `postgres_password` and `db_password` which protect RLS (Row-Level Security) separation.
+Shoehorn requires several secrets, each with a specific format. **Do not reuse secrets across keys**, especially `postgres_password` and `db_password` which protect RLS (Row-Level Security) separation.
 
 ### Terraform (Recommended)
 
 ```hcl
-# Database passwords (separate for migration user vs runtime user — CRITICAL for RLS security)
+# Database passwords (separate for migration user vs runtime user. RLS security depends on this)
 resource "random_password" "postgres_password" {
   length  = 32
   special = false
@@ -203,7 +203,7 @@ resource "random_bytes" "auth_encryption_key" {
   length = 32
 }
 
-# Session encryption key (MUST be base64-encoded 32 bytes — same shape as auth_encryption_key)
+# Session encryption key (MUST be base64-encoded 32 bytes, same shape as auth_encryption_key)
 resource "random_bytes" "session_encryption_key" {
   length = 32
 }
@@ -225,7 +225,7 @@ Then pass them to the module:
 ```hcl
 module "shoehorn" {
   credentials = {
-    # Database (MUST be different — RLS security depends on this)
+    # Database (MUST be different. RLS security depends on this)
     postgres_password      = random_password.postgres_password.result       # Migration user (BYPASSRLS)
     db_password            = random_password.db_password.result             # Runtime user (NOBYPASSRLS)
 
@@ -302,7 +302,7 @@ helm_set = {
 |---|---|---|
 | `zitadel_service_user_pat` | Zitadel → Service Users → Personal Access Token | Service-to-service auth |
 
-Same pattern — drop the key in `credentials`. The module wires
+Same pattern: drop the key in `credentials`. The module wires
 `auth.zitadel.serviceUserPatSecretRef.key` automatically. Enable orgdata with:
 
 ```hcl
@@ -313,9 +313,9 @@ helm_set = {
 }
 ```
 
-#### GitHub Integration (optional — for repo crawling + workflow engine)
+#### GitHub Integration (optional, for repo crawling + workflow engine)
 
-GitHub requires two separate GitHub Apps: one for **Crawler** (repo discovery) and one for **Forge** (workflow execution). Each app has an App ID, Installation ID, webhook secret, and a private key (PEM file).
+GitHub requires two separate GitHub Apps: one for **Crawler** (repo discovery) and one for **Forge** (workflow execution). Each app has an App ID, Installation ID, and a private key (PEM file).
 
 | Secret | Source | Description |
 |---|---|---|
@@ -376,7 +376,7 @@ Drop the keys above into the `credentials` map; the module wires the matching
 
 -> **`auth_encryption_key` and `session_encryption_key` must be base64 of 32 raw bytes.** Using `random_password { length = 32 }` will fail with _"encryption key must be 32 bytes (256 bits), got 24 bytes"_ because 32 ASCII chars decode to 24 bytes. Use `random_bytes { length = 32 }` and pass `.base64`.
 
--> **`postgres_password` and `db_password` must be different.** Same password defeats Row-Level Security — a compromised runtime app could authenticate as the migration user and bypass all tenant isolation.
+-> **`postgres_password` and `db_password` must be different.** Same password defeats Row-Level Security: a compromised runtime app could authenticate as the migration user and bypass all tenant isolation.
 
 -> **GitHub private keys are PEM files, not strings.** Mount them as volumes via `extraVolumes` (see the GitHub Integration section above).
 

@@ -220,6 +220,12 @@ variable "bootstrap_image" {
   default     = "ghcr.io/shoehorn-dev/shoehorn-api:latest"
 }
 
+variable "bootstrap_wait_db_image" {
+  description = "Image for the bootstrap Job's wait-for-db init container. Needs pg_isready. Defaults to the chart's pinned shoehorn-postgres so the Job doesn't depend on Docker Hub."
+  type        = string
+  default     = "ghcr.io/shoehorn-dev/shoehorn-postgres:v18.3-pgaudit-1.0"
+}
+
 variable "bootstrap_environment" {
   description = "ENVIRONMENT value for the bootstrap Job (must be a non-production environment)"
   type        = string

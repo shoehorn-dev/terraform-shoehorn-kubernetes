@@ -1,6 +1,6 @@
 # Shoehorn Terraform Modules
 
-**Partner-only** — Terraform modules for deploying Shoehorn onto Kubernetes clusters.
+**Partner-only.** Terraform modules for deploying Shoehorn onto Kubernetes clusters.
 
 These modules are used by cloud partners (UpCloud etc.) to offer automated Shoehorn deployments on their platforms.
 
@@ -8,7 +8,7 @@ These modules are used by cloud partners (UpCloud etc.) to offer automated Shoeh
 
 ### `modules/kubernetes`
 
-Deploys Shoehorn Internal Developer Portal onto any existing Kubernetes cluster.
+Deploys Shoehorn, the Intelligent Developer Platform, onto any existing Kubernetes cluster.
 
 ```hcl
 module "shoehorn" {
@@ -36,8 +36,8 @@ Features:
 
 ## Examples
 
-- [`examples/basic`](examples/basic) — Shoehorn with Okta auth, chart-deployed PostgreSQL, no agent
-- [`examples/okta-with-agent`](examples/okta-with-agent) — Full deployment with Okta + user/group sync + K8s agent (single-apply bootstrap)
+- [`examples/basic`](examples/basic): Shoehorn with Okta auth, chart-deployed PostgreSQL, no agent
+- [`examples/okta-with-agent`](examples/okta-with-agent): full deployment with Okta + user/group sync + K8s agent (single-apply bootstrap)
 
 ## Gotchas
 
@@ -77,6 +77,27 @@ raw bytes.** Use `random_bytes { length = 32 }.base64`, not
 which decode to 24 bytes and the platform rejects with `encryption key must
 be 32 bytes (256 bits), got 24 bytes`.
 
+## Data lifecycle
+
+PostgreSQL data survives both platform upgrades and `terraform destroy`.
+
+**`terraform apply` doesn't restart the database.** The postgres StatefulSet uses `updateStrategy: OnDelete`. Chart-template changes don't roll the postgres pod. Roll it when needed:
+
+```bash
+kubectl delete pod -n shoehorn shoehorn-postgresql-0
+```
+
+**`terraform destroy` doesn't drop the database.** The postgres StatefulSet carries `helm.sh/resource-policy: keep`, so the underlying `helm uninstall` leaves the StatefulSet and its PVC in place. A later `terraform apply` reattaches the same data.
+
+To drop the database explicitly:
+
+```bash
+kubectl delete sts -n shoehorn shoehorn-postgresql
+kubectl delete pvc -n shoehorn data-shoehorn-postgresql-0
+```
+
+**The postgres image tag is pinned** (e.g. `v18.3-pgaudit-1.0`). It follows postgres releases, not platform releases. Bumping `chart_version` upgrades platform services but leaves postgres alone unless that chart release moved the pin.
+
 ## Documentation
 
-- [Cloud Partner Integration Guide](docs/guides/cloud-partner-integration.md) — full setup guide with secrets, auth, and deployment lifecycle
+- [Cloud Partner Integration Guide](docs/guides/cloud-partner-integration.md): full setup with secrets, auth, and deployment lifecycle
