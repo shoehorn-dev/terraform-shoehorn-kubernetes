@@ -24,6 +24,9 @@ locals {
   # Set of credential keys present (used to conditionally emit *SecretRef blocks)
   cred_keys = keys(var.credentials)
 
+  # Bootstrap Job uses an explicit override if set, otherwise derives from image_tag.
+  bootstrap_image = var.bootstrap_image != "" ? var.bootstrap_image : "shoehorned/shoehorn-api:${var.image_tag}"
+
   # ---------------------------------------------------------------------------
   # Per-component *SecretRef blocks — chart references each credential by
   # secretKeyRef (name + key). With secret.defaultName set, name can be
@@ -235,6 +238,13 @@ data "http" "health" {
 resource "kubernetes_job_v1" "bootstrap_api_key" {
   count = var.enable_bootstrap && var.deploy_agent ? 1 : 0
 
+  lifecycle {
+    precondition {
+      condition     = var.bootstrap_image != "" || var.image_tag != null
+      error_message = "Bootstrap requires either bootstrap_image or image_tag to be set. There is no \"latest\" tag."
+    }
+  }
+
   metadata {
     name      = "${var.release_name}-bootstrap-api-key"
     namespace = kubernetes_namespace_v1.shoehorn.metadata[0].name
@@ -292,7 +302,7 @@ resource "kubernetes_job_v1" "bootstrap_api_key" {
 
         container {
           name    = "bootstrap"
-          image   = var.bootstrap_image
+          image   = local.bootstrap_image
           command = ["/api", "--bootstrap-api-key"]
 
           # MIGRATION_DATABASE_URL built at runtime via shell to avoid

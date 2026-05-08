@@ -215,15 +215,15 @@ variable "enable_bootstrap" {
 }
 
 variable "bootstrap_image" {
-  description = "Container image for the bootstrap API key Job (must contain the /api binary). Avoid :latest in production."
+  description = "Container image for the bootstrap API key Job. Empty means derive from image_tag as shoehorned/shoehorn-api:<image_tag>."
   type        = string
-  default     = "ghcr.io/shoehorn-dev/shoehorn-api:latest"
+  default     = ""
 }
 
 variable "bootstrap_wait_db_image" {
-  description = "Image for the bootstrap Job's wait-for-db init container. Needs pg_isready. Defaults to the chart's pinned shoehorn-postgres so the Job doesn't depend on Docker Hub."
+  description = "Image for the bootstrap Job's wait-for-db init container. Needs pg_isready."
   type        = string
-  default     = "ghcr.io/shoehorn-dev/shoehorn-postgres:v18.3-pgaudit-1.0"
+  default     = "shoehorned/shoehorn-postgres:v18.3-pgaudit-1.0"
 }
 
 variable "bootstrap_environment" {
