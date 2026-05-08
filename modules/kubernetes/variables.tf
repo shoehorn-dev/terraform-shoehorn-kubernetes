@@ -278,6 +278,25 @@ variable "agent_gitops_tool" {
   default     = ""
 }
 
+variable "argocd_namespace" {
+  description = "Kubernetes namespace where ArgoCD is installed (when agent_gitops_tool = argocd)"
+  type        = string
+  default     = "argocd"
+}
+
+variable "argocd_server_url" {
+  description = "Public ArgoCD server URL. Required to enable Sync/Refresh buttons in the Shoehorn UI."
+  type        = string
+  default     = ""
+}
+
+variable "argocd_token" {
+  description = "ArgoCD API token used by the agent for sync/refresh commands. Generate with `argocd account generate-token --account shoehorn`. Empty disables Sync/Refresh; ArgoCD apps still display read-only."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
 # =============================================================================
 # Helm Value Overrides
 # =============================================================================

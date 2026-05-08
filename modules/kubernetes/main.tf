@@ -426,14 +426,25 @@ resource "helm_release" "k8s_agent" {
       } : {}
       imagePullSecrets = var.image_pull_secrets
       agent = var.agent_gitops_tool != "" ? {
-        gitops = { tool = var.agent_gitops_tool }
+        gitops = merge(
+          { tool = var.agent_gitops_tool },
+          var.agent_gitops_tool == "argocd" ? {
+            argocd = {
+              namespace = var.argocd_namespace
+              serverURL = var.argocd_server_url
+            }
+          } : {},
+        )
       } : {}
     })],
   )
 
-  set_sensitive = [
-    { name = "shoehorn.apiToken", value = shoehorn_k8s_agent.cluster[0].token },
-  ]
+  set_sensitive = concat(
+    [{ name = "shoehorn.apiToken", value = shoehorn_k8s_agent.cluster[0].token }],
+    var.agent_gitops_tool == "argocd" && var.argocd_token != "" ? [
+      { name = "agent.gitops.argocd.token", value = var.argocd_token },
+    ] : [],
+  )
 
   set = [for k, v in var.agent_helm_set : { name = k, value = v }]
 }
