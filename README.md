@@ -1,8 +1,8 @@
 # Shoehorn Terraform Modules
 
-**Partner-only.** Terraform modules for deploying Shoehorn onto Kubernetes clusters.
+Terraform modules for deploying Shoehorn, the Intelligent Developer Platform, onto Kubernetes clusters.
 
-These modules are used by cloud partners (UpCloud etc.) to offer automated Shoehorn deployments on their platforms.
+Run a single `terraform apply` to deploy the platform plus an optional Kubernetes discovery agent. Works on any cluster you can reach with `kubectl`: managed Kubernetes, on-prem, or k3s on a laptop.
 
 ## Modules
 
@@ -36,8 +36,9 @@ Features:
 
 ## Examples
 
-- [`examples/basic`](examples/basic): Shoehorn with Okta auth, chart-deployed PostgreSQL, no agent
-- [`examples/okta-with-agent`](examples/okta-with-agent): full deployment with Okta + user/group sync + K8s agent (single-apply bootstrap)
+- [`examples/basic`](examples/basic): Okta auth, chart-deployed PostgreSQL, no agent. The smallest thing that runs.
+- [`examples/okta-with-agent`](examples/okta-with-agent): platform + K8s discovery agent in a single apply, plus Okta user/group sync.
+- [`examples/full-stack-okta-github`](examples/full-stack-okta-github): everything in `okta-with-agent`, plus a GitHub App for repo discovery, a second GitHub App for Forge workflows, ArgoCD GitOps on the agent, and a namespace-scoped cert-manager `Issuer`. Mirrors what runs on `demo.shoehorn.dev`.
 
 ## Gotchas
 
@@ -100,4 +101,4 @@ kubectl delete pvc -n shoehorn data-shoehorn-postgresql-0
 
 ## Documentation
 
-- [Cloud Partner Integration Guide](docs/guides/cloud-partner-integration.md): full setup with secrets, auth, and deployment lifecycle
+- [Deployment Guide](docs/guides/deployment-guide.md): full setup with secrets, auth providers, the bootstrap mechanism, and the day-2 lifecycle.
