@@ -1,58 +1,80 @@
 ---
-page_title: "Cloud Partner Integration Guide"
+page_title: "Deployment Guide"
+subcategory: "Getting Started"
+layout: "guides"
 description: |-
-  How cloud partners can use the Shoehorn Terraform modules
-  to offer automated Shoehorn deployments on their Kubernetes platforms.
+  Full Shoehorn deployment with the Terraform modules: secrets generation,
+  auth provider wiring, bootstrap mechanism, and the day-2 lifecycle. For
+  operators self-hosting Shoehorn, deploying it for a customer, or shipping
+  it as part of a managed offering.
+keywords:
+  - shoehorn
+  - terraform
+  - kubernetes
+  - deployment
+  - self-hosting
+  - okta
+  - zitadel
+  - bootstrap
+audience:
+  - platform-engineers
+  - cloud-partners
+  - self-hosters
+prerequisites:
+  - kubernetes-cluster
+  - kubectl-access
+  - oidc-provider
+canonical_url: https://github.com/shoehorn-dev/terraform-shoehorn-modules/blob/main/docs/guides/deployment-guide.md
 ---
 
-# Cloud Partner Integration Guide
+# Deployment Guide
 
-This guide explains how cloud partners integrate Shoehorn into their Kubernetes offerings, so customers can deploy a fully configured Intelligent Developer Platform with a single `terraform apply`.
+This guide covers a full Shoehorn deployment with the Terraform modules: secrets generation, auth provider wiring, the bootstrap mechanism, and the day-2 lifecycle. The audience is anyone running Shoehorn on Kubernetes, whether you're operating it for your own org, deploying it for a customer, or shipping it as part of a managed offering.
 
 ## Architecture
 
 ```
-Cloud Partner's Terraform Config
+Your Terraform config
     │
-    ├── Their infrastructure (K8s cluster, managed DB, DNS, etc.)
+    ├── Your infrastructure (K8s cluster, managed DB, DNS, etc.)
     │
     └── module "shoehorn" {
           source = "shoehorn-dev/kubernetes"
           # Deploys: Shoehorn platform + K8s Agent
-          # In a single apply using bootstrap API key
+          # In a single apply using the bootstrap API key
         }
 ```
 
-**Prerequisite**: A running Kubernetes cluster with `kubectl` access. The Shoehorn module handles everything else.
+**Prerequisite**: a running Kubernetes cluster with `kubectl` access. The module handles everything else.
 
-## The Kubernetes Module
+## The Kubernetes module
 
-The `modules/Kubernetes` module is the core integration point. It deploys Shoehorn onto any existing Kubernetes cluster:
+`modules/kubernetes` is the entry point. It deploys Shoehorn onto any existing Kubernetes cluster:
 
 ```hcl
 module "shoehorn" {
   source = "shoehorn-dev/kubernetes"
 
   # Required
-  domain            = "portal.customer.com"
+  domain            = "portal.example.com"
   credentials       = { ... }    # Secrets (passwords, JWT, encryption keys)
 
   # Auth (Okta, Zitadel, or Entra ID)
   auth_provider     = "okta"
   auth_config       = { domain = "...", clientId = "...", issuer = "..." }
-  admin_email       = "admin@customer.com"
+  admin_email       = "admin@example.com"
 
   # Bootstrap: single-apply agent deployment
   enable_bootstrap  = true
   deploy_agent      = true
-  cluster_id        = "customer-prod-eu"
-  cluster_name      = "Customer Production (EU)"
+  cluster_id        = "prod-eu"
+  cluster_name      = "Production EU"
 }
 ```
 
-### What It Creates
+### What it creates
 
-| Phase | Resources | Depends On |
+| Phase | Resources | Depends on |
 |---|---|---|
 | 1 | Kubernetes namespace + credentials secret | none |
 | 2 | Shoehorn Helm release (all microservices) | Phase 1 |
@@ -61,33 +83,33 @@ module "shoehorn" {
 | 5 | K8s Agent registration | Phase 4 |
 | 6 | K8s Agent Helm release | Phase 5 |
 
-## Bootstrap: Single-Apply Deployment
+## Bootstrap: single-apply deployment
 
-The bootstrap mechanism solves the chicken-and-egg problem: the Shoehorn provider needs an API key to register the agent, but API keys are created through the Shoehorn API which isn't running yet.
+The bootstrap mechanism solves a chicken-and-egg problem. The Shoehorn provider needs an API key to register the agent, but API keys are created through the Shoehorn API, which isn't running yet.
 
-### How It Works
+### How it works
 
-1. **Terraform derives a deterministic API key** from `JWT_SECRET` using `HMAC-SHA256`
-2. **A K8s Job seeds that key** into the database after the platform is healthy
-3. **The Shoehorn provider authenticates** with the same derived key to register the agent
-4. **The key auto-expires** after 1 hour (security safeguard)
-5. **After deploy**, the customer creates a permanent API key in the UI for subsequent applies
+1. **Terraform derives a deterministic API key** from `JWT_SECRET` using `HMAC-SHA256`.
+2. **A K8s Job seeds that key** into the database after the platform is healthy.
+3. **The Shoehorn provider authenticates** with the same derived key to register the agent.
+4. **The key auto-expires** after 1 hour.
+5. **After deploy**, the operator creates a permanent API key in the UI for subsequent applies.
 
-### Security Safeguards
+### Security safeguards
 
 The bootstrap key is designed for initial deployment only:
 
 | Safeguard | Description |
 |---|---|
-| HMAC-SHA256 derivation | Not plain SHA256. Prevents length-extension attacks |
-| Minimal scope | `k8s-agents:write` only. Cannot access admin APIs |
-| 1-hour TTL | Auto-expires, cannot be used for persistent access |
-| Environment gate | Refuses to run in production (fail-closed allowlist) |
-| Deterministic UUID5 | Idempotent upserts. Safe to re-run |
-| Revocation guard | Cannot un-revoke a manually revoked key |
-| Audit logging | WARN-level log on creation with key prefix, tenant, scopes |
+| HMAC-SHA256 derivation | Not plain SHA256. Prevents length-extension attacks. |
+| Minimal scope | `k8s-agents:write` only. Cannot access admin APIs. |
+| 1-hour TTL | Auto-expires, cannot be used for persistent access. |
+| Environment gate | Refuses to run in production (fail-closed allowlist). |
+| Deterministic UUID5 | Idempotent upserts. Safe to re-run. |
+| Revocation guard | Cannot un-revoke a manually revoked key. |
+| Audit logging | WARN-level log on creation with key prefix, tenant, scopes. |
 
-### Bootstrap Key Derivation
+### Bootstrap key derivation
 
 Both sides (Terraform and Go) independently compute the same key:
 
@@ -106,13 +128,13 @@ mac := hmac.New(sha256.New, []byte(jwtSecret))
 mac.Write([]byte("shoehorn-bootstrap-api-key-v1"))
 ```
 
-## Two-Phase Lifecycle
+## Two-phase lifecycle
 
-### Phase 1: Initial Deploy (Bootstrap)
+### Phase 1: initial deploy (bootstrap)
 
 ```hcl
 provider "shoehorn" {
-  host    = "https://portal.customer.com"
+  host    = "https://portal.example.com"
   api_key = local.bootstrap_api_key  # Derived from JWT_SECRET
 }
 
@@ -127,27 +149,28 @@ module "shoehorn" {
 terraform apply  # Single command deploys everything
 ```
 
-### Phase 2: Ongoing Management (Permanent Key)
+### Phase 2: ongoing management (permanent key)
 
-After the initial deploy, the customer:
-1. Logs into Shoehorn UI
-2. Creates a permanent API key (Settings → API Keys)
-3. Updates the Terraform config:
+After the initial deploy:
+
+1. Log into the Shoehorn UI.
+2. Create a permanent API key (Settings → API Keys).
+3. Update the Terraform config:
 
 ```hcl
 provider "shoehorn" {
-  host    = "https://portal.customer.com"
+  host    = "https://portal.example.com"
   api_key = var.shoehorn_api_key  # Permanent key from UI
 }
 ```
 
-Subsequent `terraform apply` calls use the permanent key. No bootstrap needed.
+Subsequent `terraform apply` calls use the permanent key. Bootstrap is no longer needed.
 
-## Database Options
+## Database options
 
-The module supports two PostgreSQL modes:
+The module supports two PostgreSQL modes.
 
-### Chart-Deployed (Default)
+### Chart-deployed (default)
 
 The Helm chart deploys its own PostgreSQL StatefulSet. No external database needed.
 
@@ -158,7 +181,7 @@ module "shoehorn" {
 }
 ```
 
-### External Managed Database
+### External managed database
 
 For production, use a managed PostgreSQL (RDS, Cloud SQL, UpCloud Managed DB, etc.):
 
@@ -172,16 +195,16 @@ module "shoehorn" {
 }
 ```
 
-**Note**: When using a managed database, the `shoehorn_user` role must be created beforehand with `BYPASSRLS` and `LOGIN` privileges.
+**Note**: when using a managed database, the `shoehorn_user` role must be created beforehand with `BYPASSRLS` and `LOGIN` privileges.
 
-## Secrets Generation
+## Secrets generation
 
-Shoehorn requires several secrets, each with a specific format. **Do not reuse secrets across keys**, especially `postgres_password` and `db_password` which protect RLS (Row-Level Security) separation.
+Shoehorn requires several secrets, each with a specific format. **Do not reuse secrets across keys**, especially `postgres_password` and `db_password`, which protect Row-Level Security separation.
 
-### Terraform (Recommended)
+### Terraform (recommended)
 
 ```hcl
-# Database passwords (separate for migration user vs runtime user. RLS security depends on this)
+# Database passwords (separate for migration user vs runtime user. RLS depends on this)
 resource "random_password" "postgres_password" {
   length  = 32
   special = false
@@ -225,13 +248,13 @@ Then pass them to the module:
 ```hcl
 module "shoehorn" {
   credentials = {
-    # Database (MUST be different. RLS security depends on this)
+    # Database (MUST be different. RLS depends on this)
     postgres_password      = random_password.postgres_password.result       # Migration user (BYPASSRLS)
     db_password            = random_password.db_password.result             # Runtime user (NOBYPASSRLS)
 
     # Signing & encryption
     jwt_secret             = random_password.jwt_secret.result              # JWT token signing
-    auth_encryption_key    = random_bytes.auth_encryption_key.base64        # AES-256-GCM (base64!)
+    auth_encryption_key    = random_bytes.auth_encryption_key.base64        # AES-256-GCM (base64)
     session_encryption_key = random_bytes.session_encryption_key.base64     # base64 of 32 bytes
 
     # Service passwords
@@ -261,7 +284,7 @@ kubectl create secret generic shoehorn-credentials -n shoehorn \
   --from-literal=okta_client_secret="YOUR_OKTA_CLIENT_SECRET"
 ```
 
-### Key Format Reference
+### Key format reference
 
 #### Core (always required)
 
@@ -275,7 +298,7 @@ kubectl create secret generic shoehorn-credentials -n shoehorn \
 | `valkey_password` | Any string | Valkey/Redis authentication |
 | `meilisearch_master_key` | Hex string | Meilisearch API master key |
 
-#### Auth Provider (one set required)
+#### Auth provider (one set required)
 
 **Okta:**
 
@@ -313,7 +336,7 @@ helm_set = {
 }
 ```
 
-#### GitHub Integration (optional, for repo crawling + workflow engine)
+#### GitHub integration (optional, for repo crawling + workflow engine)
 
 GitHub requires two separate GitHub Apps: one for **Crawler** (repo discovery) and one for **Forge** (workflow execution). Each app has an App ID, Installation ID, and a private key (PEM file).
 
@@ -361,7 +384,7 @@ kubectl create secret generic github-forge-credentials -n shoehorn \
   --from-file=github_forge_private_key=forge-app.pem
 ```
 
-#### Optional Services
+#### Optional services
 
 | Secret | When needed | Description |
 |---|---|---|
@@ -369,10 +392,9 @@ kubectl create secret generic github-forge-credentials -n shoehorn \
 | `argocd_token` | ArgoCD GitOps integration | ArgoCD API bearer token |
 | `upcloud_token` | UpCloud cloud resource discovery | UpCloud API token |
 
-Drop the keys above into the `credentials` map; the module wires the matching
-`*SecretRef` paths in the chart automatically.
+Drop the keys above into the `credentials` map; the module wires the matching `*SecretRef` paths in the chart automatically.
 
-### Important Notes
+### Important notes
 
 -> **`auth_encryption_key` and `session_encryption_key` must be base64 of 32 raw bytes.** Using `random_password { length = 32 }` will fail with _"encryption key must be 32 bytes (256 bits), got 24 bytes"_ because 32 ASCII chars decode to 24 bytes. Use `random_bytes { length = 32 }` and pass `.base64`.
 
@@ -402,7 +424,7 @@ provider "shoehorn" {
 }
 ```
 
-## Auth Provider Configuration
+## Auth provider configuration
 
 ### Okta
 
@@ -440,11 +462,14 @@ module "shoehorn" {
     projectId   = "..."
   }
 }
+```
 
-## Cloud Partner Example: UpCloud
+## Example: UpCloud Managed Kubernetes
+
+A complete deployment that provisions an UpCloud-managed Kubernetes cluster and lands Shoehorn on top of it. The same shape works for any managed Kubernetes (EKS, GKE, AKS): swap the `upcloud_kubernetes_*` resources for your provider's equivalents.
 
 ```hcl
-# 1. Partner creates their infrastructure
+# 1. Provision the cluster
 resource "upcloud_kubernetes_cluster" "main" { ... }
 resource "upcloud_kubernetes_node_group" "workers" { ... }
 
@@ -469,39 +494,41 @@ provider "helm" {
 module "shoehorn" {
   source = "shoehorn-dev/kubernetes"
 
-  domain            = "portal.customer.com"
-  organization_name = "Customer Corp"
-  organization_slug = "customer-corp"
+  domain            = "portal.example.com"
+  organization_name = "Example Corp"
+  organization_slug = "example-corp"
   storage_class     = "upcloud-block-storage-maxiops"
 
   auth_provider = "okta"
   auth_config   = { ... }
-  admin_email   = "admin@customer.com"
+  admin_email   = "admin@example.com"
   credentials   = { ... }
 
   enable_bootstrap = true
   deploy_agent     = true
-  cluster_id       = "customer-prod-fi-hel1"
-  cluster_name     = "Customer Production (Finland)"
+  cluster_id       = "prod-fi-hel1"
+  cluster_name     = "Production (Finland)"
 
   depends_on = [upcloud_kubernetes_node_group.workers]
 }
 ```
 
-## Module Reference
+If you're shipping Shoehorn as part of a managed offering, this is the shape to copy: provision infrastructure, then drop the module on top in the same root config.
 
-### Required Variables
+## Module reference
+
+### Required variables
 
 | Variable | Type | Description |
 |---|---|---|
 | `domain` | string | Public domain for Shoehorn |
 | `credentials` | map(string) | Secret keys (see Credentials section) |
 
-### Optional Variables
+### Optional variables
 
 | Variable | Type | Default | Description |
 |---|---|---|---|
-| `auth_provider` | string | `"zitadel"` | Auth: `zitadel` or `okta`
+| `auth_provider` | string | `"zitadel"` | Auth: `zitadel` or `okta` |
 | `auth_config` | map(string) | `{}` | Provider-specific auth config |
 | `admin_email` | string | `""` | Initial tenant admin email |
 | `database_host` | string | `""` | External DB host (empty = chart PostgreSQL) |

@@ -1,0 +1,39 @@
+## Cluster
+kubeconfig_path = "~/.kube/config"
+domain          = "portal.acme.com"
+storage_class   = "your-cluster-storage-class"
+ingress_type    = "ingressRoute"  # or "ingress" / "httpRoute"
+replica_count   = 2               # drop to 1 on tight clusters
+
+## Tenant
+organization_name = "Acme Corp"
+organization_slug = "acme"
+admin_email       = "platform@acme.com"
+cluster_id        = "acme-prod-eu"
+cluster_name      = "Acme Production (EU)"
+
+## Okta
+okta_domain        = "acme.okta.com"
+okta_client_id     = "0oa..."
+okta_issuer        = "https://acme.okta.com/oauth2/default"
+okta_client_secret = "..."
+okta_api_token     = "..."
+
+## GitHub
+github_organization           = "acme"
+github_app_id                 = "1234567"
+github_installation_id        = "98765432"
+github_app_private_key_path   = "./secrets/github-app.pem"
+github_forge_app_id           = "1234568"
+github_forge_installation_id  = "98765433"
+github_forge_private_key_path = "./secrets/github-forge.pem"
+
+## ArgoCD
+argocd_namespace  = "argocd"
+argocd_server_url = "https://argocd.acme.com"
+argocd_token      = "..."
+
+## API key
+# Leave empty on first apply. After login, create a permanent key in the UI
+# (Settings -> API Keys) and put it here, then run `terraform apply` again.
+shoehorn_api_key = ""
