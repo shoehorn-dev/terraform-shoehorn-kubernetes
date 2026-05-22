@@ -124,7 +124,7 @@ resource "random_password" "meilisearch_master_key" {
 # =============================================================================
 
 module "shoehorn" {
-  source = "../../modules/kubernetes"
+  source = "../../"
 
   domain            = var.domain
   organization_name = var.organization_name
@@ -163,9 +163,9 @@ module "shoehorn" {
   # `auth.okta.apiTokenSecretRef.key` automatically from the matching keys in
   # the `credentials` map above — no helm_set entry needed for those.
   helm_set = {
-    "auth.orgdata.enabled"          = "true"
-    "auth.orgdata.providers[0]"     = "okta"
-    "auth.orgdata.primaryProvider"  = "okta"
+    "auth.orgdata.enabled"         = "true"
+    "auth.orgdata.providers[0]"    = "okta"
+    "auth.orgdata.primaryProvider" = "okta"
   }
 
   health_check_protocol = "https"

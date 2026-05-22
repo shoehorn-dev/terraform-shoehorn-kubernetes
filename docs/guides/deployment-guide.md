@@ -24,7 +24,7 @@ prerequisites:
   - kubernetes-cluster
   - kubectl-access
   - oidc-provider
-canonical_url: https://github.com/shoehorn-dev/terraform-shoehorn-modules/blob/main/docs/guides/deployment-guide.md
+canonical_url: https://github.com/shoehorn-dev/terraform-shoehorn-kubernetes/blob/main/docs/guides/deployment-guide.md
 ---
 
 # Deployment Guide
@@ -47,13 +47,14 @@ Your Terraform config
 
 **Prerequisite**: a running Kubernetes cluster with `kubectl` access. The module handles everything else.
 
-## The Kubernetes module
+## The module
 
-`modules/kubernetes` is the entry point. It deploys Shoehorn onto any existing Kubernetes cluster:
+The module deploys Shoehorn onto any existing Kubernetes cluster:
 
 ```hcl
 module "shoehorn" {
-  source = "shoehorn-dev/kubernetes"
+  source  = "shoehorn-dev/kubernetes/shoehorn"
+  version = "~> 0.1"
 
   # Required
   domain            = "portal.example.com"

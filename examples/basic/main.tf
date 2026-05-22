@@ -83,7 +83,7 @@ resource "random_password" "meilisearch_master_key" {
 # =============================================================================
 
 module "shoehorn" {
-  source = "../../modules/kubernetes"
+  source = "../../"
 
   domain            = var.domain
   organization_name = var.organization_name
