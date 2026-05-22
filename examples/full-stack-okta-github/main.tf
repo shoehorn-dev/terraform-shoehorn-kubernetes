@@ -128,7 +128,7 @@ resource "random_password" "github_webhook_secret" {
 # =============================================================================
 
 module "shoehorn" {
-  source = "../../modules/kubernetes"
+  source = "../../"
 
   domain            = var.domain
   organization_name = var.organization_name

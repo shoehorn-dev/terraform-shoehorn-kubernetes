@@ -1,18 +1,15 @@
-# Shoehorn Terraform Modules
+# Shoehorn Terraform Module
 
-Terraform modules for deploying Shoehorn, the Intelligent Developer Platform, onto Kubernetes clusters.
+A Terraform module for deploying Shoehorn, the Intelligent Developer Platform, onto Kubernetes clusters.
 
 Run a single `terraform apply` to deploy the platform plus an optional Kubernetes discovery agent. Works on any cluster you can reach with `kubectl`: managed Kubernetes, on-prem, or k3s on a laptop.
 
-## Modules
-
-### `modules/kubernetes`
-
-Deploys Shoehorn, the Intelligent Developer Platform, onto any existing Kubernetes cluster.
+## Usage
 
 ```hcl
 module "shoehorn" {
-  source = "github.com/shoehorn-dev/terraform-shoehorn-modules//modules/kubernetes"
+  source  = "shoehorn-dev/kubernetes/shoehorn"
+  version = "~> 0.1"
 
   domain            = "portal.customer.com"
   auth_provider     = "okta"
