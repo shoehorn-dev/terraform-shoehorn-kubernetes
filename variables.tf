@@ -297,6 +297,24 @@ variable "argocd_token" {
   sensitive   = true
 }
 
+variable "agent_helm_enabled" {
+  description = "Detect Helm releases in the cluster and report each release with the resources it manages. Grants the agent read (list) access to Secrets, which is where Helm stores release data. Off by default."
+  type        = bool
+  default     = false
+}
+
+variable "agent_helm_namespace" {
+  description = "Namespace the agent scans for Helm releases, or empty to scan all namespaces (used when agent_helm_enabled = true)."
+  type        = string
+  default     = ""
+}
+
+variable "agent_helm_interval" {
+  description = "How often the agent rescans for Helm releases, between 30s and 1h (used when agent_helm_enabled = true)."
+  type        = string
+  default     = "5m"
+}
+
 # =============================================================================
 # Helm Value Overrides
 # =============================================================================
