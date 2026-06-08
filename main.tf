@@ -435,17 +435,26 @@ resource "helm_release" "k8s_agent" {
         pullPolicy = "Always"
       } : {}
       imagePullSecrets = var.image_pull_secrets
-      agent = var.agent_gitops_tool != "" ? {
-        gitops = merge(
-          { tool = var.agent_gitops_tool },
-          var.agent_gitops_tool == "argocd" ? {
-            argocd = {
-              namespace = var.argocd_namespace
-              serverURL = var.argocd_server_url
-            }
-          } : {},
-        )
-      } : {}
+      agent = merge(
+        var.agent_gitops_tool != "" ? {
+          gitops = merge(
+            { tool = var.agent_gitops_tool },
+            var.agent_gitops_tool == "argocd" ? {
+              argocd = {
+                namespace = var.argocd_namespace
+                serverURL = var.argocd_server_url
+              }
+            } : {},
+          )
+        } : {},
+        var.agent_helm_enabled ? {
+          helm = {
+            enabled   = true
+            namespace = var.agent_helm_namespace
+            interval  = var.agent_helm_interval
+          }
+        } : {},
+      )
     })],
   )
 
