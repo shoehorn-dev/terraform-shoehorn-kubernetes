@@ -37,6 +37,29 @@ Features:
 - [`examples/okta-with-agent`](examples/okta-with-agent): platform + K8s discovery agent in a single apply, plus Okta user/group sync.
 - [`examples/full-stack-okta-github`](examples/full-stack-okta-github): everything in `okta-with-agent`, plus a GitHub App for repo discovery, a second GitHub App for Forge workflows, ArgoCD GitOps on the agent, and a namespace-scoped cert-manager `Issuer`. Mirrors what runs on `demo.shoehorn.dev`.
 
+## Agent chart overrides
+
+Use `agent_helm_values` and `agent_helm_set` to pass arbitrary values to the `shoehorn-k8s-agent` chart. They work the same as `helm_values` / `helm_set` do for the platform release.
+
+```hcl
+module "shoehorn" {
+  # ...
+
+  # Load a large-cluster preset from a local file
+  agent_helm_values = [file("values-large-cluster.yaml")]
+
+  # Or set individual values at highest priority
+  agent_helm_set = {
+    "agent.kubernetes.scopeMode" = "namespaces"
+  }
+}
+```
+
+| Variable | Type | Default | Description |
+|---|---|---|---|
+| `agent_helm_values` | list(string) | `[]` | YAML strings appended to agent chart values after module-generated values |
+| `agent_helm_set` | map(string) | `{}` | Individual agent chart value overrides (highest priority) |
+
 ## Gotchas
 
 A few things that have tripped up partner deploys.

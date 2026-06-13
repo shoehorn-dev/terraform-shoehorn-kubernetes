@@ -539,6 +539,8 @@ If you're shipping Shoehorn as part of a managed offering, this is the shape to 
 | `replica_count` | number | `2` | Replicas per service |
 | `image_tag` | string | `null` | Pin image version |
 | `chart_path` | string | `""` | Local chart path (for development) |
+| `agent_helm_values` | list(string) | `[]` | YAML strings appended to agent chart values after module-generated values, e.g. `[file("values-large-cluster.yaml")]` |
+| `agent_helm_set` | map(string) | `{}` | Individual agent chart value overrides at highest priority, e.g. `{ "agent.kubernetes.scopeMode" = "namespaces" }` |
 
 ### Outputs
 

@@ -338,8 +338,14 @@ variable "helm_set_sensitive" {
   sensitive   = true
 }
 
+variable "agent_helm_values" {
+  description = "List of YAML strings with extra values for the shoehorn-k8s-agent chart, e.g. [file(\"values-large-cluster.yaml\")]. Applied after module-generated values."
+  type        = list(string)
+  default     = []
+}
+
 variable "agent_helm_set" {
-  description = "Map of Helm value overrides for the K8s agent chart"
+  description = "Map of extra Helm value overrides for the shoehorn-k8s-agent chart (highest priority), e.g. { \"agent.kubernetes.scopeMode\" = \"namespaces\" }"
   type        = map(string)
   default     = {}
 }

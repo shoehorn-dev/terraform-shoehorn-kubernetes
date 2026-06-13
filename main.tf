@@ -456,6 +456,7 @@ resource "helm_release" "k8s_agent" {
         } : {},
       )
     })],
+    var.agent_helm_values,
   )
 
   set_sensitive = concat(
