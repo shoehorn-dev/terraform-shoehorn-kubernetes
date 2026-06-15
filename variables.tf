@@ -315,6 +315,12 @@ variable "agent_helm_interval" {
   default     = "5m"
 }
 
+variable "agent_connected_enabled" {
+  description = "Collect connected resources (ServiceAccounts + RBAC, Services, ConfigMaps, Secrets [values stripped], PVCs) to power rbac-risk / exposed signals. Grants the agent read on Secrets in scope. Default off."
+  type        = bool
+  default     = false
+}
+
 # =============================================================================
 # Helm Value Overrides
 # =============================================================================

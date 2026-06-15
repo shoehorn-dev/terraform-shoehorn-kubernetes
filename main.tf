@@ -454,6 +454,11 @@ resource "helm_release" "k8s_agent" {
             interval  = var.agent_helm_interval
           }
         } : {},
+        var.agent_connected_enabled ? {
+          connected = {
+            enabled = true
+          }
+        } : {},
       )
     })],
     var.agent_helm_values,
