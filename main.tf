@@ -24,6 +24,25 @@ locals {
   # Set of credential keys present (used to conditionally emit *SecretRef blocks)
   cred_keys = keys(var.credentials)
 
+  # ---------------------------------------------------------------------------
+  # auth_config validation — auth_config is map(string), so a misspelled key
+  # (e.g. tenant_id instead of tenantId) silently merges in while the real key
+  # stays empty, surfacing only at helm install. These check the chart's
+  # required keys per provider so terraform plan fails early instead.
+  # Key names match the chart's auth.<provider>.* fields in values.yaml.
+  # ---------------------------------------------------------------------------
+  auth_required_keys = {
+    okta       = ["domain", "clientId"]
+    "entra-id" = ["tenantId", "clientId"]
+    zitadel    = ["clientId", "projectId", "externalUrl"]
+  }
+
+  # Keys required for the active provider that are missing or empty in auth_config.
+  auth_missing_keys = [
+    for k in lookup(local.auth_required_keys, var.auth_provider, []) :
+    k if trimspace(lookup(var.auth_config, k, "")) == ""
+  ]
+
   # Bootstrap Job uses an explicit override if set, otherwise derives from image_tag.
   bootstrap_image = var.bootstrap_image != "" ? var.bootstrap_image : "shoehorned/shoehorn-api:${var.image_tag}"
 
@@ -193,6 +212,13 @@ resource "helm_release" "shoehorn" {
   wait             = true
   wait_for_jobs    = true
   timeout          = var.helm_timeout
+
+  lifecycle {
+    precondition {
+      condition     = length(local.auth_missing_keys) == 0
+      error_message = "auth_config for auth_provider \"${var.auth_provider}\" is missing or has empty required key(s): ${join(", ", local.auth_missing_keys)}. Expected: ${join(", ", lookup(local.auth_required_keys, var.auth_provider, []))}. Check for typos (e.g. tenant_id vs tenantId)."
+    }
+  }
 
   # Module-generated values (lowest priority)
   # then user YAML overrides

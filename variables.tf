@@ -159,9 +159,10 @@ variable "credentials" {
       contains(keys(var.credentials), "postgres_password"),
       contains(keys(var.credentials), "db_password"),
       contains(keys(var.credentials), "jwt_secret"),
+      contains(keys(var.credentials), "auth_encryption_key"),
       contains(keys(var.credentials), "session_encryption_key"),
     ])
-    error_message = "credentials must contain: postgres_password, db_password, jwt_secret, session_encryption_key"
+    error_message = "credentials must contain: postgres_password, db_password, jwt_secret, auth_encryption_key, session_encryption_key"
   }
 }
 
