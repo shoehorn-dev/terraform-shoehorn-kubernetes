@@ -78,12 +78,20 @@ locals {
     contains(local.cred_keys, "entra_client_secret") ? { clientSecretRef = { key = "entra_client_secret" } } : {},
   ) : null
 
+  # MCP OAuth resource server (helm auth.mcp.*). Off by default; PATs remain
+  # the primary /mcp auth path.
+  mcp_auth_block = {
+    enabled  = var.mcp_oauth_enabled
+    audience = var.mcp_oauth_audience
+  }
+
   auth_block = merge(
     { provider = var.auth_provider },
     length(local.auth_session_block) > 0 ? { session = local.auth_session_block } : {},
     local.okta_block != null ? { okta = local.okta_block } : {},
     local.zitadel_block != null ? { zitadel = local.zitadel_block } : {},
     local.entra_block != null ? { entraId = local.entra_block } : {},
+    { mcp = local.mcp_auth_block },
   )
 
   # ---------------------------------------------------------------------------
@@ -120,6 +128,7 @@ locals {
     valkey      = local.valkey_block
     meilisearch = local.meilisearch_block
     auth        = local.auth_block
+    mcp         = var.mcp_resource_url != "" ? { resourceUrl = var.mcp_resource_url } : {}
 
     # RBAC admin bootstrap
     rbac = var.admin_email != "" ? {
