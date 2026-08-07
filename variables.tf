@@ -126,6 +126,29 @@ variable "admin_email" {
   default     = ""
 }
 
+# -----------------------------------------------------------------------------
+# MCP OAuth resource server (helm auth.mcp.*, mcp.resourceUrl). Off by
+# default — personal access tokens remain the primary /mcp auth path.
+# -----------------------------------------------------------------------------
+
+variable "mcp_oauth_enabled" {
+  description = "Enable the MCP OAuth resource-server leg (helm auth.mcp.enabled), letting MCP clients authenticate with an OIDC bearer token instead of a static PAT. PATs keep working either way."
+  type        = bool
+  default     = false
+}
+
+variable "mcp_oauth_audience" {
+  description = "Expected audience for MCP bearer tokens (helm auth.mcp.audience). Empty auto-derives a per-provider default: zitadel -> ZITADEL_PROJECT_ID, entra-id -> both api://<client-id> and the bare client id, okta's default authorization server -> api://default. Set explicitly for a dedicated Okta custom authorization server."
+  type        = string
+  default     = ""
+}
+
+variable "mcp_resource_url" {
+  description = "Canonical MCP endpoint URL advertised in the RFC 9728 Protected Resource Metadata document (helm mcp.resourceUrl). Empty derives \"https://<domain>/mcp\" — set only when this install's public MCP endpoint differs from that (e.g. behind a path-rewriting proxy)."
+  type        = string
+  default     = ""
+}
+
 # =============================================================================
 # Credentials (the keys here become the K8s secret referenced by secret.defaultName).
 # The module auto-wires per-credential *SecretRef paths from key names below.
