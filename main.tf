@@ -81,8 +81,10 @@ locals {
   # MCP OAuth resource server (helm auth.mcp.*). Off by default; PATs remain
   # the primary /mcp auth path.
   mcp_auth_block = {
-    enabled  = var.mcp_oauth_enabled
-    audience = var.mcp_oauth_audience
+    enabled      = var.mcp_oauth_enabled
+    audience     = var.mcp_oauth_audience
+    clientId     = var.mcp_oauth_client_id
+    callbackPort = var.mcp_oauth_callback_port
   }
 
   auth_block = merge(
