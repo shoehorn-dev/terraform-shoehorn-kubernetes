@@ -143,6 +143,18 @@ variable "mcp_oauth_audience" {
   default     = ""
 }
 
+variable "mcp_oauth_client_id" {
+  description = "OAuth application registered in your IdP for MCP clients to authenticate as (helm auth.mcp.clientId). Required before the MCP setup page can offer company login: no IdP Shoehorn supports allows a client to register itself, so while this is empty the page keeps offering personal access tokens only."
+  type        = string
+  default     = ""
+}
+
+variable "mcp_oauth_callback_port" {
+  description = "Loopback port an MCP client listens on for the sign-in redirect (helm auth.mcp.callbackPort). Must match the redirect URI registered in your IdP exactly, port included."
+  type        = number
+  default     = 8080
+}
+
 variable "mcp_resource_url" {
   description = "Canonical MCP endpoint URL advertised in the RFC 9728 Protected Resource Metadata document (helm mcp.resourceUrl). Empty derives \"https://<domain>/mcp\" — set only when this install's public MCP endpoint differs from that (e.g. behind a path-rewriting proxy)."
   type        = string
