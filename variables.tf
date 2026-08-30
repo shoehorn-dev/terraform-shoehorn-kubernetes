@@ -126,6 +126,41 @@ variable "admin_email" {
   default     = ""
 }
 
+# -----------------------------------------------------------------------------
+# MCP OAuth resource server (helm auth.mcp.*, mcp.resourceUrl). Off by
+# default — personal access tokens remain the primary /mcp auth path.
+# -----------------------------------------------------------------------------
+
+variable "mcp_oauth_enabled" {
+  description = "Enable the MCP OAuth resource-server leg (helm auth.mcp.enabled), letting MCP clients authenticate with an OIDC bearer token instead of a static PAT. PATs keep working either way."
+  type        = bool
+  default     = false
+}
+
+variable "mcp_oauth_audience" {
+  description = "Expected audience for MCP bearer tokens (helm auth.mcp.audience). Empty auto-derives a per-provider default: zitadel -> ZITADEL_PROJECT_ID, entra-id -> both api://<client-id> and the bare client id, okta's default authorization server -> api://default. Set explicitly for a dedicated Okta custom authorization server."
+  type        = string
+  default     = ""
+}
+
+variable "mcp_oauth_client_id" {
+  description = "OAuth application registered in your IdP for MCP clients to authenticate as (helm auth.mcp.clientId). Required before the MCP setup page can offer company login: no IdP Shoehorn supports allows a client to register itself, so while this is empty the page keeps offering personal access tokens only."
+  type        = string
+  default     = ""
+}
+
+variable "mcp_oauth_callback_port" {
+  description = "Loopback port an MCP client listens on for the sign-in redirect (helm auth.mcp.callbackPort). Must match the redirect URI registered in your IdP exactly, port included."
+  type        = number
+  default     = 8080
+}
+
+variable "mcp_resource_url" {
+  description = "Canonical MCP endpoint URL advertised in the RFC 9728 Protected Resource Metadata document (helm mcp.resourceUrl). Empty derives \"https://<domain>/mcp\" — set only when this install's public MCP endpoint differs from that (e.g. behind a path-rewriting proxy)."
+  type        = string
+  default     = ""
+}
+
 # =============================================================================
 # Credentials (the keys here become the K8s secret referenced by secret.defaultName).
 # The module auto-wires per-credential *SecretRef paths from key names below.
@@ -314,6 +349,12 @@ variable "agent_helm_interval" {
   description = "How often the agent rescans for Helm releases, between 30s and 1h (used when agent_helm_enabled = true)."
   type        = string
   default     = "5m"
+}
+
+variable "agent_connected_enabled" {
+  description = "Collect connected resources (ServiceAccounts + RBAC, Services, ConfigMaps, Secrets [values stripped], PVCs) to power rbac-risk / exposed signals. Grants the agent read on Secrets in scope. Default off."
+  type        = bool
+  default     = false
 }
 
 # =============================================================================
