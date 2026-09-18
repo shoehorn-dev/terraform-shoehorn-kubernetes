@@ -25,7 +25,10 @@ locals {
   cred_keys = keys(var.credentials)
 
   # Bootstrap Job uses an explicit override if set, otherwise derives from image_tag.
-  bootstrap_image = var.bootstrap_image != "" ? var.bootstrap_image : "shoehorned/shoehorn-api:${var.image_tag}"
+  bootstrap_image = (
+    var.bootstrap_image != "" ? var.bootstrap_image :
+    var.image_tag != null ? "shoehorned/shoehorn-api:${var.image_tag}" : ""
+  )
 
   # ---------------------------------------------------------------------------
   # Per-component *SecretRef blocks — chart references each credential by
@@ -78,14 +81,15 @@ locals {
     contains(local.cred_keys, "entra_client_secret") ? { clientSecretRef = { key = "entra_client_secret" } } : {},
   ) : null
 
-  # MCP OAuth resource server (helm auth.mcp.*). Off by default; PATs remain
-  # the primary /mcp auth path.
-  mcp_auth_block = {
-    enabled      = var.mcp_oauth_enabled
-    audience     = var.mcp_oauth_audience
-    clientId     = var.mcp_oauth_client_id
-    callbackPort = var.mcp_oauth_callback_port
-  }
+  # MCP OAuth resource server (helm auth.mcp.*). Unset `enabled` keeps the chart default.
+  mcp_auth_block = merge(
+    var.mcp_oauth_enabled == null ? {} : { enabled = var.mcp_oauth_enabled },
+    {
+      audience     = var.mcp_oauth_audience
+      clientId     = var.mcp_oauth_client_id
+      callbackPort = var.mcp_oauth_callback_port
+    },
+  )
 
   auth_block = merge(
     { provider = var.auth_provider },
