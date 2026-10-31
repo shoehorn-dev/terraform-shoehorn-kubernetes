@@ -60,6 +60,23 @@ module "shoehorn" {
 | `agent_helm_values` | list(string) | `[]` | YAML strings appended to agent chart values after module-generated values |
 | `agent_helm_set` | map(string) | `{}` | Individual agent chart value overrides (highest priority) |
 
+## MCP company login
+
+The chart turns MCP company login on by default, and the module leaves it on
+unless you set `mcp_oauth_enabled`. Set it to `false` to allow personal access
+tokens only. Tokens keep working either way.
+
+Company login needs an OAuth application in your identity provider for MCP
+clients to sign in as. Until `mcp_oauth_client_id` is set, the MCP setup page
+keeps offering personal access tokens.
+
+| Variable | Default | Sets |
+|----------|---------|------|
+| `mcp_oauth_enabled` | `null`, left to the chart (on) | `auth.mcp.enabled` |
+| `mcp_oauth_client_id` | `""` | `auth.mcp.clientId`, the OAuth application MCP clients sign in as |
+| `mcp_oauth_audience` | `""`, derived per provider | `auth.mcp.audience` |
+| `mcp_oauth_callback_port` | `8080` | `auth.mcp.callbackPort`; must match the redirect URI registered in your identity provider |
+
 ## Gotchas
 
 A few things that have tripped up partner deploys.

@@ -132,9 +132,9 @@ variable "admin_email" {
 # -----------------------------------------------------------------------------
 
 variable "mcp_oauth_enabled" {
-  description = "Enable the MCP OAuth resource-server leg (helm auth.mcp.enabled), letting MCP clients authenticate with an OIDC bearer token instead of a static PAT. PATs keep working either way."
+  description = "MCP company login (helm auth.mcp.enabled). Null keeps the chart default (on); false allows personal access tokens only."
   type        = bool
-  default     = false
+  default     = null
 }
 
 variable "mcp_oauth_audience" {
