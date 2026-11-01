@@ -10,8 +10,9 @@
 # Prerequisites:
 #   - Kubernetes cluster with kubectl access
 #   - A single-tenant Entra app registration: exposed API (scope
-#     access_as_user), groups claim, and Graph permissions User.Read.All +
-#     GroupMember.Read.All granted with admin consent.
+#     access_as_user), groups claim, and Graph application permissions
+#     User.Read.All, Group.Read.All, and GroupMember.Read.All granted with
+#     admin consent.
 # =============================================================================
 
 terraform {
