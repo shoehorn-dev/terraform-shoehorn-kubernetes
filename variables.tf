@@ -104,13 +104,13 @@ variable "database_user" {
 # =============================================================================
 
 variable "auth_provider" {
-  description = "Authentication provider: zitadel, okta, or entra-id"
+  description = "Authentication provider: zitadel, okta, entra-id, or keycloak"
   type        = string
   default     = "zitadel"
 
   validation {
-    condition     = contains(["zitadel", "okta", "entra-id"], var.auth_provider)
-    error_message = "auth_provider must be one of: zitadel, okta, entra-id"
+    condition     = contains(["zitadel", "okta", "entra-id", "keycloak"], var.auth_provider)
+    error_message = "auth_provider must be one of: zitadel, okta, entra-id, keycloak"
   }
 }
 
@@ -118,6 +118,12 @@ variable "auth_config" {
   description = "Auth provider configuration (passed as Helm set values under auth.<provider>.*)"
   type        = map(string)
   default     = {}
+}
+
+variable "auth_audience" {
+  description = "Expected JWT audience (helm auth.audience). Optional for Zitadel/Okta/Entra ID, which auto-derive a default; REQUIRED for Keycloak, which does not default a token's audience to the client_id."
+  type        = string
+  default     = ""
 }
 
 variable "admin_email" {
@@ -180,6 +186,7 @@ variable "credentials" {
       valkey_password, meilisearch_master_key,
       okta_client_secret, okta_api_token,
       entra_client_secret, zitadel_service_user_pat,
+      keycloak_client_secret, keycloak_admin_client_secret,
       github_app_private_key, github_forge_private_key,
       smtp_password, argocd_token, upcloud_token
 
