@@ -35,6 +35,7 @@ locals {
     okta       = ["domain", "clientId"]
     "entra-id" = ["tenantId", "clientId"]
     zitadel    = ["clientId", "projectId", "externalUrl"]
+    keycloak   = ["url", "realm", "clientId"]
   }
 
   # Keys required for the active provider that are missing or empty in auth_config.
@@ -100,6 +101,14 @@ locals {
     contains(local.cred_keys, "entra_client_secret") ? { clientSecretRef = { key = "entra_client_secret" } } : {},
   ) : null
 
+  # Keycloak does not auto-derive an audience the way Okta/Zitadel/Entra do;
+  # that is handled by var.auth_audience below, not by anything in this block.
+  keycloak_block = var.auth_provider == "keycloak" ? merge(
+    var.auth_config,
+    contains(local.cred_keys, "keycloak_client_secret") ? { clientSecretRef = { key = "keycloak_client_secret" } } : {},
+    contains(local.cred_keys, "keycloak_admin_client_secret") ? { adminClientSecretRef = { key = "keycloak_admin_client_secret" } } : {},
+  ) : null
+
   # MCP OAuth resource server (helm auth.mcp.*). Unset `enabled` keeps the chart default.
   mcp_auth_block = merge(
     var.mcp_oauth_enabled == null ? {} : { enabled = var.mcp_oauth_enabled },
@@ -112,10 +121,12 @@ locals {
 
   auth_block = merge(
     { provider = var.auth_provider },
+    var.auth_audience != "" ? { audience = var.auth_audience } : {},
     length(local.auth_session_block) > 0 ? { session = local.auth_session_block } : {},
     local.okta_block != null ? { okta = local.okta_block } : {},
     local.zitadel_block != null ? { zitadel = local.zitadel_block } : {},
     local.entra_block != null ? { entraId = local.entra_block } : {},
+    local.keycloak_block != null ? { keycloak = local.keycloak_block } : {},
     { mcp = local.mcp_auth_block },
   )
 

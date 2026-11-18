@@ -5,6 +5,15 @@ mock_provider "shoehorn" {}
 
 variables {
   domain = "shoehorn.example.com"
+  # Pre-existing gap fixed in passing (2026-11-18): the default auth_provider
+  # is "zitadel", but these required fields were never set, so every run here
+  # failed the auth_missing_keys precondition before even reaching the MCP
+  # assertions below. Unrelated to MCP; this is just making the fixture valid.
+  auth_config = {
+    clientId    = "test-client-id"
+    projectId   = "test-project-id"
+    externalUrl = "https://auth.example.com"
+  }
   credentials = {
     postgres_password      = "test"
     db_password            = "test"
