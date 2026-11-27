@@ -181,7 +181,6 @@ module "shoehorn" {
     # Public Docker Hub images. No pull secret needed.
     "api.image.repository"        = "shoehorned/shoehorn-api"
     "web.image.repository"        = "shoehorned/shoehorn-web"
-    "eventbus.image.repository"   = "shoehorned/shoehorn-eventbus"
     "worker.image.repository"     = "shoehorned/shoehorn-worker"
     "crawler.image.repository"    = "shoehorned/shoehorn-crawler"
     "forge.image.repository"      = "shoehorned/shoehorn-forge"

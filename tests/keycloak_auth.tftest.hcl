@@ -27,11 +27,11 @@ run "keycloak_is_accepted_as_auth_provider" {
     }
     credentials = {
       postgres_password      = "test"
-      db_password             = "test"
-      jwt_secret              = "test"
-      auth_encryption_key     = "dGVzdHRlc3R0ZXN0dGVzdHRlc3R0ZXN0dGVzdHRlc3Q="
-      session_encryption_key  = "dGVzdHRlc3R0ZXN0dGVzdHRlc3R0ZXN0dGVzdHRlc3Q="
-      keycloak_client_secret  = "test-login-secret"
+      db_password            = "test"
+      jwt_secret             = "test"
+      auth_encryption_key    = "dGVzdHRlc3R0ZXN0dGVzdHRlc3R0ZXN0dGVzdHRlc3Q="
+      session_encryption_key = "dGVzdHRlc3R0ZXN0dGVzdHRlc3R0ZXN0dGVzdHRlc3Q="
+      keycloak_client_secret = "test-login-secret"
     }
   }
 
