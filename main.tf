@@ -56,18 +56,32 @@ locals {
   # omitted; the chart helper falls back to the shared default secret.
   # ---------------------------------------------------------------------------
 
-  postgresql_block = merge(
-    { enabled = !local.use_external_db },
-    local.use_external_db ? {
-      external = {
-        enabled = true
-        host    = var.database_host
-        port    = var.database_port
-      }
-    } : {},
-    contains(local.cred_keys, "postgres_password") ? { superuserPasswordSecretRef = { key = "postgres_password" } } : {},
-    contains(local.cred_keys, "db_password") ? { passwordSecretRef = { key = "db_password" } } : {},
-  )
+  # External database settings. Kept out of a conditional object: a
+  # `cond ? {..} : {}` inside merge() unifies to map(string), which sent
+  # enabled = "true" and port = "5432" to the chart as strings.
+  postgresql_external = {
+    external = {
+      enabled  = true
+      host     = var.database_host
+      port     = var.database_port
+      database = var.database_name
+      user     = var.database_user
+    }
+    # TLS to the external server. createCertificate is for the bundled
+    # PostgreSQL only; an external server brings its own certificate.
+    tls = {
+      enabled           = var.database_sslmode != "disable"
+      sslMode           = var.database_sslmode
+      createCertificate = false
+    }
+  }
+
+  postgresql_block = merge(concat(
+    [{ enabled = !local.use_external_db }],
+    local.use_external_db ? [local.postgresql_external] : [],
+    contains(local.cred_keys, "postgres_password") ? [{ superuserPasswordSecretRef = { key = "postgres_password" } }] : [],
+    contains(local.cred_keys, "db_password") ? [{ passwordSecretRef = { key = "db_password" } }] : [],
+  )...)
 
   valkey_block = contains(local.cred_keys, "valkey_password") ? {
     passwordSecretRef = { key = "valkey_password" }
@@ -146,12 +160,11 @@ locals {
     image = var.image_tag != null ? { tag = var.image_tag } : {}
 
     replicaCount = {
-      api      = var.replica_count
-      web      = var.replica_count
-      eventbus = var.replica_count
-      worker   = var.replica_count
-      crawler  = var.replica_count
-      forge    = var.replica_count
+      api     = var.replica_count
+      web     = var.replica_count
+      worker  = var.replica_count
+      crawler = var.replica_count
+      forge   = var.replica_count
     }
 
     # Shared credentials Secret (this module creates the K8s Secret;
