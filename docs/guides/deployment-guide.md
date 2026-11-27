@@ -450,7 +450,7 @@ module "shoehorn" {
 - Grant type: Authorization Code
 - PKCE: Enabled
 - Sign-in redirect URI: `https://<domain>/api/v1/auth/callback`
-- Sign-out redirect URI: `https://<domain>`
+- Sign-out redirect URI: `https://<domain>/logout` (Okta needs an exact match, so the bare domain fails sign-out)
 
 ### Zitadel
 
